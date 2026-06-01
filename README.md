@@ -271,7 +271,7 @@ The first MIA implementation compared D_f losses against the full mixed test set
 
 ---
 
-## Week 3 — DKF: Disentangled Knowledge Forgetting
+## Week 3-4 — DKF: Disentangled Knowledge Forgetting
 
 ### Goal
 Implement the paper's proposed method — **DKF (Disentangled Knowledge Forgetting)** — and demonstrate it outperforms the Week 2 baselines on the Avg.Gap metric. DKF uses a β-VAE to disentangle shared and class-specific knowledge, generates counterfactual samples, and uses them to guide a student model to forget the target class without damaging the retain classes.
@@ -457,6 +457,42 @@ Fine-tune retains an edge on Acc_Df (0.10% vs 2.26%) — a fundamental tradeoff:
 | Beats Fine-tune on Avg.Gap | ✅ | 2.65% vs 2.73% |
 | Beats Fine-tune on MIA | ✅ | 51.95% vs 54.10% |
 | Results saved | ✅ | `results/week3_results.json` |
+
+---
+
+## Week 5 — Analysis: Visualising Disentanglement and Shared Knowledge
+
+### Goal
+
+Week 5 is a pure analysis and visualisation week. No new unlearning method is implemented. The goal is to build interpretable evidence that the β-VAE's disentanglement is working as claimed — that S genuinely captures shared cross-class features and U genuinely captures class-specific features.
+
+### Scripts
+
+| Script | What it produces |
+|--------|-----------------|
+| `visualize_disentanglement.py` | t-SNE plots of S and U latent spaces coloured by class — shows S clusters are mixed (shared) and U clusters are separated (unique) |
+| `visualize_shared_knowledge.py` | Counterfactual grid: original airplane → counterfactual (airplane S + bird U) side by side, with cosine similarity panels across classes |
+| `visualize_best_image_story.py` | Full disentanglement story per image: original → reconstruction → shared-only (S, U=0) → unique-only (S=0, U) → counterfactual |
+| `visualize_image_decomposition.py` | Per-image S/U decomposition panel showing what each encoder contributes |
+| `visualize_su_decomposition.py` | Grid comparing S and U reconstructions across multiple classes simultaneously |
+| `projection_unlearning.py` | Implements GP-Unlearn (gradient projection baseline): projects forget gradients onto the retain gradient subspace to cancel cross-class interference |
+
+### Key Findings
+
+**t-SNE of S space:** Samples from different classes cluster together in S — airplane and bird images occupy overlapping regions, confirming S captures shared structure (wings, backgrounds) rather than class identity.
+
+**t-SNE of U space:** Samples from the same class cluster tightly together and different classes are well-separated — U carries class-specific information as intended.
+
+**Counterfactual quality check:** The `x_cf = Decoder(S_f, U_r)` images look visually like retain-class objects but with structural hints of the forget class — the correct qualitative behaviour. Teacher predictions on `x_cf` are high-confidence retain-class predictions, confirming they are valid distillation targets.
+
+### Week 5 Summary
+
+| Item | Status | Detail |
+|------|--------|--------|
+| Disentanglement visualised | ✅ | t-SNE confirms S=shared, U=unique |
+| Counterfactual quality checked | ✅ | Visual + cosine evidence |
+| GP-Unlearn baseline | ✅ | Gradient projection method implemented as additional comparison |
+| Full story visualisation | ✅ | Per-image breakdown of what VAE separates |
 
 ---
 
@@ -938,133 +974,6 @@ Fine-tune achieves similar Acc_Dr simply by ignoring the forget set during train
 | Best config identified | ✅ | ep=1, lg=0.5 — hits all 5 publication targets |
 | Comparison vs Fine-tune | ✅ | Matches Acc_Dr at 5.4× lower Acc_Df |
 | Results saved | ✅ | `results/week11_sweep_results.json` |
-
----
-
-## Week 9 — Scaling to CIFAR-100 (ResNet-50, 10-class forgetting)
-
-### Setup Change
-
-| | CIFAR-10 | CIFAR-100 |
-|---|---|---|
-| Dataset | 10 classes | 100 classes |
-| Forget set | 1 class (class 0) | 10 classes (classes 0-9) |
-| Model | ResNet-18 | ResNet-50 (CIFAR-adapted) |
-| Feature dim | 512-dim avgpool | 2048-dim avgpool |
-
-### Root Cause of Failure
-
-DKF and its variants perform significantly worse on CIFAR-100. The root cause is the β-VAE: with 10 forget classes in every batch, the encoder receives mixed signals from 10 different forget-class distributions and learns a blurry average of what "shared vs unique" means. This produces noisy counterfactuals, which corrupt the KL distillation target for the student.
-
-Notably, NegGrad (a simpler method) outperforms DKF on CIFAR-100 — evidence that the VAE is the bottleneck, not the student training objective.
-
-### Results (CIFAR-100)
-
-| Method | Acc_Dr | Acc_Df | Acc_val | MIA | Retain Cosine |
-|--------|--------|--------|---------|-----|---------------|
-| Retrain | 99.96% | 0.00% | 69.30% | 55.95 | — |
-| NegGrad | 93.83% | 0.48% | 63.12% | 52.65 | — |
-| DKF | 89.95% | 0.72% | 59.76% | 60.90 | 0.895 |
-| RA-DKF | 88.68% | 0.62% | 59.27% | 62.40 | 0.890 |
-| E-RA-DKF | 86.57% | 0.68% | 57.67% | 60.35 | 0.880 |
-
-E-RA-DKF is actually the worst variant on CIFAR-100 — the cosine alignment term helps when counterfactuals are clean but hurts when they are noisy, amplifying the VAE bottleneck.
-
----
-
-## Week 10 — Conditional β-VAE DKF (C-DKF)
-
-### Core Idea
-
-The unconditional β-VAE has no class information — it guesses what is "shared" vs "unique" from pixels alone across 10 mixed forget classes simultaneously. The fix: inject a learned class embedding into both encoders and the decoder.
-
-```
-class_embed = nn.Embedding(num_classes, 64)
-
-encoder_s(x_f, embed(y_f)) → S_f   # knows which forget class to encode shared features for
-encoder_u(x_r, embed(y_r)) → U_r   # knows which retain class to encode unique features for
-decoder(S_f, U_r, embed(y_f))  → x_cf  # knows which forget identity to strip out
-```
-
-This turns the β-VAE into a **Conditional β-VAE (Cβ-VAE)**. Each class now gets a targeted counterfactual rather than a blurry average across 10 classes.
-
-### Method Variants
-
-| Method | Description |
-|--------|-------------|
-| C-DKF | Conditional VAE + base DKF losses |
-| CE-RA-DKF | Conditional VAE + cosine alignment + detached contrast |
-| C-DKF v2 | C-DKF + retain knowledge distillation (KL student(x_r) ∥ teacher(x_r)) |
-
-### Results (CIFAR-100)
-
-| Method | Acc_Dr | Acc_Df | Acc_val | MIA | Retain Cosine | Avg.Gap |
-|--------|--------|--------|---------|-----|---------------|---------|
-| DKF (Week 9) | 89.95% | 0.72% | 59.76% | 60.90 | 0.895 | 6.57 |
-| E-RA-DKF (Week 9) | 86.57% | 0.68% | 57.67% | 60.35 | 0.880 | 7.58 |
-| C-DKF v1 | 93.42% | 1.26% | 62.08% | 61.15 | 0.911 | 5.47 |
-| CE-RA-DKF v1 | 93.04% | 1.86% | 62.13% | 59.95 | 0.906 | 5.40 |
-| **C-DKF v2** | **93.45%** | **0.86%** | 61.87% | 60.45 | 0.894 | **5.03** |
-
-The conditional VAE closes ~75% of the retain-accuracy gap between DKF and retrain (+3.5% Acc_Dr). The retain KD term in v2 further improves Avg.Gap to 5.03.
-
----
-
-## Week 11 — Guarded Retain Repair
-
-### Motivation
-
-C-DKF v2 forgets well (Acc_Df 0.86%) but the student still drifts ~6.5% below retrain on Acc_Dr. This utility damage is a separate problem from forgetting quality — a targeted repair phase addresses it directly.
-
-### Two-Stage Method
-
-**Stage 1 — C-DKF v2 forgetting** (from Week 10)
-Conditional VAE + DKF losses + retain KD. Produces clean forgetting.
-
-**Stage 2 — Guarded retain repair**
-Short fine-tuning on retain data with a forget suppression guard:
-
-```
-L_repair = λ_retain * CE(student(x_r), y_r)
-         + λ_kd     * KL(student(x_r) || teacher(x_r))    # soft label anchor
-         + λ_guard  * KL(student(x_f) || teacher(x_cf))   # forget suppression
-```
-
-The guard term reuses the Cβ-VAE counterfactuals to keep forget-class predictions aligned to counterfactual teacher outputs during repair. Without this guard, even 1 epoch of retain fine-tuning can partially relearn forgotten classes.
-
-### Sweep Results (lr=1e-4, 9 configurations)
-
-| Config | Acc_Dr | Acc_Df | Acc_val | MIA | Avg.Gap |
-|--------|--------|--------|---------|-----|---------|
-| C-DKF v2 (no repair) | 93.44% | 0.66% | 61.87% | 60.10 | 4.79 |
-| ep=1, lg=0.5 | **95.10%** | **1.54%** | 62.81% | 57.30 | 3.66 |
-| ep=2, lg=0.5 | 90.54% | 2.36% | 60.45% | 53.60 | 5.65 |
-| ep=3, lg=0.5 | 94.78% | 2.26% | **63.57%** | **55.25** | **3.37** |
-| ep=1, lg=0.75 | 91.72% | 1.04% | 60.24% | 53.55 | 5.09 |
-| ep=3, lg=0.75 | 92.00% | 2.34% | 61.75% | 54.30 | 4.78 |
-| ep=1, lg=1.0 | 94.63% | 3.58% | 62.97% | 55.70 | 3.85 |
-
-**Best configuration: ep=1, lg=0.5** — hits all paper targets:
-- Acc_Dr 95.10% (target ≥ 94.2%) ✅
-- Acc_Df 1.54% (target ≤ 2.0%) ✅
-- Acc_val 62.81% (target ≥ 62.5%) ✅
-- MIA 57.30 (target 55–58) ✅
-- Avg.Gap 3.66 (target ≤ 4.0) ✅
-
-### Full CIFAR-100 Progression
-
-| Method | Acc_Dr | Acc_Df | Acc_val | MIA | Avg.Gap |
-|--------|--------|--------|---------|-----|---------|
-| Retrain | 99.97% | 0.00% | 69.30% | 55.65 | — |
-| Fine-tune | 95.68% | 8.40% | 65.03% | 60.25 | — |
-| NegGrad | 93.83% | 0.48% | 63.12% | 52.65 | — |
-| DKF | 89.95% | 0.72% | 59.76% | 60.90 | 6.57 |
-| E-RA-DKF | 86.57% | 0.68% | 57.67% | 60.35 | 7.58 |
-| C-DKF v2 | 93.45% | 0.86% | 61.87% | 60.45 | 5.03 |
-| **C-DKF v2 + Repair** | **95.10%** | **1.54%** | **62.81%** | **57.30** | **3.66** |
-
-### Key finding
-The final method (C-DKF v2 + 1-epoch guarded repair) matches Fine-tune's retain accuracy (95.10% vs 95.68%) while actually forgetting properly (1.54% vs 8.40% Acc_Df) — the strongest comparison in the paper.
 
 ---
 
