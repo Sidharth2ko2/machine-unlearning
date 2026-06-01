@@ -1,0 +1,68 @@
+{
+  "Original": {
+    "Acc_Dr": 99.96666666666667,
+    "Acc_Df": 99.96,
+    "Acc_val": 77.47,
+    "MIA": 68.60000000000001
+  },
+  "Retrain": {
+    "Acc_Dr": 99.96222222222222,
+    "Acc_Df": 0.0,
+    "Acc_val": 69.3,
+    "MIA": 55.95
+  },
+  "Fine-tune": {
+    "Acc_Dr": 95.67555555555556,
+    "Acc_Df": 8.4,
+    "Acc_val": 65.03,
+    "MIA": 60.25
+  },
+  "NegGrad": {
+    "Acc_Dr": 93.83333333333333,
+    "Acc_Df": 0.48,
+    "Acc_val": 63.12,
+    "MIA": 52.65
+  },
+  "DKF": {
+    "Acc_Dr": 89.95111111111112,
+    "Acc_Df": 0.72,
+    "Acc_val": 59.76,
+    "MIA": 60.9,
+    "Retain_Feature_Cosine": 0.8954640626907349,
+    "Retain_Feature_Drift": 0.10453593730926514,
+    "Retain_Feature_MSE": 0.00010208594903815538,
+    "Retain_Agreement": 90.54,
+    "Retain_KL": 0.35660875597000125,
+    "Retain_ARI": 0.8133417698229547,
+    "Retain_NMI": 0.9092014856461785,
+    "Avg.Gap": 6.305277777777775
+  },
+  "RA-DKF": {
+    "Acc_Dr": 88.67555555555556,
+    "Acc_Df": 0.62,
+    "Acc_val": 59.27,
+    "MIA": 62.4,
+    "Retain_Feature_Cosine": 0.8897474408149719,
+    "Retain_Feature_Drift": 0.11025255918502808,
+    "Retain_Feature_MSE": 0.00010766854393295944,
+    "Retain_Agreement": 88.44,
+    "Retain_KL": 0.420095623421669,
+    "Retain_ARI": 0.7912186780626844,
+    "Retain_NMI": 0.8996151955751293,
+    "Avg.Gap": 7.096666666666663
+  },
+  "E-RA-DKF": {
+    "Acc_Dr": 86.57111111111111,
+    "Acc_Df": 0.68,
+    "Acc_val": 57.67,
+    "MIA": 60.35,
+    "Retain_Feature_Cosine": 0.8799284100532532,
+    "Retain_Feature_Drift": 0.12007158994674683,
+    "Retain_Feature_MSE": 0.0001172574411612004,
+    "Retain_Agreement": 86.68,
+    "Retain_KL": 0.48916944608688356,
+    "Retain_ARI": 0.777149226799888,
+    "Retain_NMI": 0.8878879558470697,
+    "Avg.Gap": 7.525277777777777
+  }
+}

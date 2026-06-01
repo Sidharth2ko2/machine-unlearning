@@ -1,0 +1,28 @@
+{
+  "Original": {
+    "Acc_Dr": 99.96666666666667,
+    "Acc_Df": 99.96,
+    "Acc_val": 77.47,
+    "MIA": 68.8
+  },
+  "Retrain": {
+    "Acc_Dr": 99.97555555555556,
+    "Acc_Df": 0.0,
+    "Acc_val": 69.29,
+    "MIA": 55.65
+  },
+  "DKF": {
+    "Acc_Dr": 90.03555555555556,
+    "Acc_Df": 0.76,
+    "Acc_val": 59.76,
+    "MIA": 60.4,
+    "Retain_Feature_Cosine": 0.8942037224769592,
+    "Retain_Feature_Drift": 0.10579627752304077,
+    "Retain_Feature_MSE": 0.00010331672092434019,
+    "Retain_Agreement": 90.36,
+    "Retain_KL": 0.3550422779083252,
+    "Retain_ARI": 0.8059042398424814,
+    "Retain_NMI": 0.9061642191346266,
+    "Avg.Gap": 6.245000000000002
+  }
+}

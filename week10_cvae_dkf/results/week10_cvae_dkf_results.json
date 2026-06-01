@@ -1,0 +1,82 @@
+{
+  "Original": {
+    "Acc_Dr": 99.94888888888889,
+    "Acc_Df": 99.96,
+    "Acc_val": 77.47,
+    "MIA": 68.75
+  },
+  "Retrain": {
+    "Acc_Dr": 99.96222222222222,
+    "Acc_Df": 0.0,
+    "Acc_val": 69.3,
+    "MIA": 54.300000000000004
+  },
+  "Fine-tune": {
+    "Acc_Dr": 95.58888888888889,
+    "Acc_Df": 7.7,
+    "Acc_val": 65.03,
+    "MIA": 60.4
+  },
+  "NegGrad": {
+    "Acc_Dr": 94.05777777777777,
+    "Acc_Df": 0.48,
+    "Acc_val": 63.11,
+    "MIA": 51.74999999999999
+  },
+  "DKF": {
+    "Acc_Dr": 89.82222222222222,
+    "Acc_Df": 0.72,
+    "Acc_val": 59.76,
+    "MIA": 60.199999999999996,
+    "Retain_Feature_Cosine": 0.8934442400932312,
+    "Retain_Feature_Drift": 0.1065557599067688,
+    "Retain_Feature_MSE": 0.00010405843204353005,
+    "Retain_Agreement": 90.54,
+    "Retain_KL": 0.3367926332950592,
+    "Retain_ARI": 0.8232700114594872,
+    "Retain_NMI": 0.912203573367708,
+    "Avg.Gap": 6.5749999999999975
+  },
+  "E-RA-DKF": {
+    "Acc_Dr": 86.35555555555555,
+    "Acc_Df": 0.46,
+    "Acc_val": 57.66,
+    "MIA": 58.9,
+    "Retain_Feature_Cosine": 0.8792704343795776,
+    "Retain_Feature_Drift": 0.12072956562042236,
+    "Retain_Feature_MSE": 0.00011790007556555793,
+    "Retain_Agreement": 86.34,
+    "Retain_KL": 0.5011195310592651,
+    "Retain_ARI": 0.7666131168125682,
+    "Retain_NMI": 0.8794992541231614,
+    "Avg.Gap": 7.576666666666666
+  },
+  "C-DKF": {
+    "Acc_Dr": 93.41555555555556,
+    "Acc_Df": 1.26,
+    "Acc_val": 62.08,
+    "MIA": 61.150000000000006,
+    "Retain_Feature_Cosine": 0.9108149409294128,
+    "Retain_Feature_Drift": 0.08918505907058716,
+    "Retain_Feature_MSE": 8.709482062840834e-05,
+    "Retain_Agreement": 93.74,
+    "Retain_KL": 0.23259228553771974,
+    "Retain_ARI": 0.8691864112415326,
+    "Retain_NMI": 0.9403388262811397,
+    "Avg.Gap": 5.469166666666667
+  },
+  "CE-RA-DKF": {
+    "Acc_Dr": 93.04,
+    "Acc_Df": 1.86,
+    "Acc_val": 62.13,
+    "MIA": 59.95,
+    "Retain_Feature_Cosine": 0.9064300060272217,
+    "Retain_Feature_Drift": 0.09356999397277832,
+    "Retain_Feature_MSE": 9.137704910244793e-05,
+    "Retain_Agreement": 92.92,
+    "Retain_KL": 0.2588100519657135,
+    "Retain_ARI": 0.835396899192238,
+    "Retain_NMI": 0.9220886501425992,
+    "Avg.Gap": 5.4005555555555524
+  }
+}

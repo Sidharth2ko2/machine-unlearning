@@ -1,0 +1,42 @@
+{
+  "Original": {
+    "Acc_Dr": 99.97111111111111,
+    "Acc_Df": 99.94,
+    "Acc_val": 77.48,
+    "MIA": 68.5
+  },
+  "Retrain": {
+    "Acc_Dr": 99.95555555555555,
+    "Acc_Df": 0.0,
+    "Acc_val": 69.3,
+    "MIA": 55.7
+  },
+  "C-DKF v2": {
+    "Acc_Dr": 93.45333333333333,
+    "Acc_Df": 0.86,
+    "Acc_val": 61.89,
+    "MIA": 61.050000000000004,
+    "Retain_Feature_Cosine": 0.8943870067596436,
+    "Retain_Feature_Drift": 0.10561299324035645,
+    "Retain_Feature_MSE": 0.0001031376959872432,
+    "Retain_Agreement": 93.6,
+    "Retain_KL": 0.29579492938518526,
+    "Retain_ARI": 0.8399825058264258,
+    "Retain_NMI": 0.9195980866590484,
+    "Avg.Gap": 5.030555555555553
+  },
+  "CE-RA-DKF v2": {
+    "Acc_Dr": 92.43777777777778,
+    "Acc_Df": 0.58,
+    "Acc_val": 62.05,
+    "MIA": 61.199999999999996,
+    "Retain_Feature_Cosine": 0.8977704048156738,
+    "Retain_Feature_Drift": 0.10222959518432617,
+    "Retain_Feature_MSE": 9.983361087506637e-05,
+    "Retain_Agreement": 91.48,
+    "Retain_KL": 0.31305944023132326,
+    "Retain_ARI": 0.8145558139312005,
+    "Retain_NMI": 0.9160727493795695,
+    "Avg.Gap": 5.211944444444439
+  }
+}

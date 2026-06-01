@@ -1,0 +1,36 @@
+{
+  "Retrain": {
+    "Acc_Dr": 99.96888888888888,
+    "Acc_Df": 0.0,
+    "Acc_val": 69.29,
+    "MIA": 55.65
+  },
+  "C-DKF v2": {
+    "Acc_Dr": 93.35777777777778,
+    "Acc_Df": 0.86,
+    "Acc_val": 61.87,
+    "MIA": 60.45,
+    "Retain_Feature_Cosine": 0.8957312703132629,
+    "Retain_Feature_Drift": 0.10426872968673706,
+    "Retain_Feature_MSE": 0.000101824953162577,
+    "Retain_Agreement": 93.06,
+    "Retain_KL": 0.3085668551445007,
+    "Retain_ARI": 0.8368243405610102,
+    "Retain_NMI": 0.9201518158292215,
+    "Avg.Gap": 4.922777777777778
+  },
+  "AG-C-DKF": {
+    "Acc_Dr": 91.72,
+    "Acc_Df": 2.6,
+    "Acc_val": 60.42,
+    "MIA": 55.300000000000004,
+    "Retain_Feature_Cosine": 0.8611675500869751,
+    "Retain_Feature_Drift": 0.1388324499130249,
+    "Retain_Feature_MSE": 0.00013557853526435792,
+    "Retain_Agreement": 91.1,
+    "Retain_KL": 0.718131078338623,
+    "Retain_ARI": 0.727794586944797,
+    "Retain_NMI": 0.8922087484663825,
+    "Avg.Gap": 5.017222222222221
+  }
+}
