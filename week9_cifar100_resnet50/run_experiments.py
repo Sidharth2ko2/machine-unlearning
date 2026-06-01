@@ -61,6 +61,10 @@ def main():
     parser.add_argument("--student-epochs", type=int, default=DKF_EPOCHS)
     parser.add_argument("--lambda-align", type=float, default=LAMBDA_ALIGN)
     parser.add_argument("--lambda-forget", type=float, default=LAMBDA_FORGET)
+    parser.add_argument("--dkf-batches-per-epoch", type=int, default=None,
+                        help="Limit DKF-family retain batches per epoch. Useful on smaller GPUs.")
+    parser.add_argument("--dkf-amp", action="store_true",
+                        help="Use CUDA mixed precision for DKF-family training.")
     parser.add_argument("--max-eval-samples", type=int, default=None,
                         help="Debug only. Leave unset for final full evaluation.")
     args = parser.parse_args()
@@ -71,6 +75,8 @@ def main():
     run_all = "all" in stages
 
     print(f"[Device] {device}")
+    if device.type == "cuda":
+        torch.backends.cudnn.benchmark = True
     names = class_names(download=args.download)
     print("[Forget classes]", ", ".join(f"{i}:{names[i]}" for i in FORGET_CLASSES))
 
@@ -134,6 +140,8 @@ def main():
                 device,
                 method="dkf",
                 student_epochs=args.student_epochs,
+                max_batches_per_epoch=args.dkf_batches_per_epoch,
+                use_amp=args.dkf_amp,
             ),
             args.reuse_checkpoints,
             device,
@@ -152,6 +160,8 @@ def main():
                 method="radkf",
                 student_epochs=args.student_epochs,
                 lambda_align=args.lambda_align,
+                max_batches_per_epoch=args.dkf_batches_per_epoch,
+                use_amp=args.dkf_amp,
             ),
             args.reuse_checkpoints,
             device,
@@ -171,6 +181,8 @@ def main():
                 student_epochs=args.student_epochs,
                 lambda_align=args.lambda_align,
                 lambda_forget=args.lambda_forget,
+                max_batches_per_epoch=args.dkf_batches_per_epoch,
+                use_amp=args.dkf_amp,
             ),
             args.reuse_checkpoints,
             device,

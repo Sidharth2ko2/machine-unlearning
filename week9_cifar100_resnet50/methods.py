@@ -23,7 +23,7 @@ from config import (
     TEMPERATURE,
     VAE_PRETRAIN_EPOCHS,
 )
-from model_utils import get_features
+from model_utils import get_features, get_features_and_logits
 
 
 def _cycle(loader):
@@ -89,6 +89,8 @@ def train_student(
     lambda_c=LAMBDA_C,
     lambda_align=LAMBDA_ALIGN,
     detach_retain_contrast=False,
+    max_batches_per_epoch=None,
+    use_amp=False,
 ):
     """
     method:
@@ -112,47 +114,71 @@ def train_student(
     optimizer = optim.Adam(student.parameters(), lr=lr)
     criterion = nn.CrossEntropyLoss()
     forget_cycle = _cycle(forget_loader)
+    amp_enabled = use_amp and device.type == "cuda"
+    scaler = torch.cuda.amp.GradScaler(enabled=amp_enabled)
 
     if method == "eradkf":
         detach_retain_contrast = True
 
     desc = method.upper()
-    for _ in tqdm(range(student_epochs), desc=desc, unit="epoch"):
+    batches_per_epoch = len(retain_loader)
+    if max_batches_per_epoch is not None:
+        batches_per_epoch = min(max_batches_per_epoch, batches_per_epoch)
+
+    for epoch in tqdm(range(student_epochs), desc=desc, unit="epoch"):
         student.train()
-        for x_r, y_r in retain_loader:
+        retain_iter = iter(retain_loader)
+        inner = tqdm(
+            range(batches_per_epoch),
+            desc=f"{desc} epoch {epoch + 1}/{student_epochs}",
+            unit="batch",
+            leave=False,
+        )
+        for _ in inner:
+            try:
+                x_r, y_r = next(retain_iter)
+            except StopIteration:
+                retain_iter = iter(retain_loader)
+                x_r, y_r = next(retain_iter)
             x_f, _ = next(forget_cycle)
             x_r, y_r = x_r.to(device), y_r.to(device)
             x_f = x_f.to(device)
             b = min(x_r.size(0), x_f.size(0))
             x_r, y_r, x_f = x_r[:b], y_r[:b], x_f[:b]
 
-            with torch.no_grad():
+            with torch.no_grad(), torch.cuda.amp.autocast(enabled=amp_enabled):
                 _, x_cf, _, _, _, _, _, _ = vae(x_f, x_r)
-                teacher_cf = F.softmax(teacher(x_cf), dim=1)
-                z_teacher_r = F.normalize(get_features(teacher, x_r), dim=1)
+                z_teacher_r, _ = get_features_and_logits(teacher, x_r)
+                _, teacher_cf_logits = get_features_and_logits(teacher, x_cf)
+                teacher_cf = F.softmax(teacher_cf_logits, dim=1)
+                z_teacher_r = F.normalize(z_teacher_r, dim=1)
 
-            optimizer.zero_grad()
-            loss_retain = lambda_retain * criterion(student(x_r), y_r)
-            loss_forget = lambda_forget * F.kl_div(
-                F.log_softmax(student(x_f), dim=1),
-                teacher_cf,
-                reduction="batchmean",
-            )
-            z_f = get_features(student, x_f)
-            z_cf = get_features(student, x_cf)
-            z_r = get_features(student, x_r)
-            z_r_contrast = z_r.detach() if detach_retain_contrast else z_r
-            loss_contrast = lambda_c * contrastive_loss(z_f, z_cf, z_r_contrast)
+            optimizer.zero_grad(set_to_none=True)
+            with torch.cuda.amp.autocast(enabled=amp_enabled):
+                z_r, logits_r = get_features_and_logits(student, x_r)
+                z_f, logits_f = get_features_and_logits(student, x_f)
+                z_cf = get_features(student, x_cf)
+                z_r_contrast = z_r.detach() if detach_retain_contrast else z_r
 
-            loss = loss_retain + loss_forget + loss_contrast
-            if method == "radkf":
-                loss = loss + lambda_align * F.mse_loss(F.normalize(z_r, dim=1), z_teacher_r)
-            elif method == "eradkf":
-                loss = loss + lambda_align * cosine_alignment_loss(z_r, z_teacher_r)
+                loss_retain = lambda_retain * criterion(logits_r, y_r)
+                loss_forget = lambda_forget * F.kl_div(
+                    F.log_softmax(logits_f, dim=1),
+                    teacher_cf,
+                    reduction="batchmean",
+                )
+                loss_contrast = lambda_c * contrastive_loss(z_f, z_cf, z_r_contrast)
 
-            loss.backward()
+                loss = loss_retain + loss_forget + loss_contrast
+                if method == "radkf":
+                    loss = loss + lambda_align * F.mse_loss(F.normalize(z_r, dim=1), z_teacher_r)
+                elif method == "eradkf":
+                    loss = loss + lambda_align * cosine_alignment_loss(z_r, z_teacher_r)
+
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
             nn.utils.clip_grad_norm_(student.parameters(), max_norm=1.0)
-            optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
 
     name = {
         "dkf": "dkf_resnet50_cifar100.pth",

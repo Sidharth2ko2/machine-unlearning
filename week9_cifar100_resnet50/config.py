@@ -12,7 +12,7 @@ DATA_DIR = "./data"
 CHECKPOINT_DIR = "./checkpoints"
 RESULTS_DIR = "./results"
 
-BATCH_SIZE = 128
+BATCH_SIZE = 64
 NUM_WORKERS = 0
 
 LR_ORIGINAL = 0.1

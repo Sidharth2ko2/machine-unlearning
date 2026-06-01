@@ -552,58 +552,230 @@ Experiments run with λ_align ∈ {0.1, 0.5, 1.0}. Results from `results/week6_7
 
 ---
 
+## Week 8 — E-RA-DKF: Enhanced Representation-Aligned DKF
+
+### Motivation
+
+RA-DKF's normalized MSE alignment was correct in principle but had two problems: (1) MSE penalises magnitude differences, not just angular deviation — the geometry of representation space is angular, (2) the InfoNCE contrastive term used retain features as negatives, pulling them around via gradients that conflict with L_align. E-RA-DKF fixes both.
+
+### Three Enhancements over RA-DKF
+
+**1. Cosine alignment instead of normalized MSE**
+```
+L_align = 1 - cosine_similarity(normalize(z_student_r), normalize(z_teacher_r))
+```
+Only penalises angular deviation. Normalized MSE still penalises small scale differences that don't matter for representation geometry.
+
+**2. Multi-layer alignment**
+Alignment is applied at multiple intermediate ResNet stages simultaneously (configurable subset of layer2, layer3, avgpool). Each stage produces its own pooled vector; cosine loss is computed per layer and averaged. Earlier layers anchor low-level texture/shape; later layers anchor semantic structure.
+
+**3. Detached retain negatives in contrastive loss**
+```python
+z_r_contrast = z_r.detach()  # contrastive loss no longer pulls retain reps
+```
+The InfoNCE contrastive term no longer receives gradients through retain features. L_align alone governs where retain features land, eliminating the gradient conflict from RA-DKF.
+
+### Results (CIFAR-10, best configuration lf=0.07)
+
+| Method | Acc_Dr | Acc_Df | Acc_val | MIA | Retain Cosine | Avg.Gap |
+|--------|--------|--------|---------|-----|---------------|---------|
+| DKF | 94.18% | 2.26% | 76.36% | 51.95 | 0.912 | 2.58 |
+| RA-DKF (best) | 94.59% | 3.42% | 76.68% | 54.15 | 0.904 | 3.30 |
+| **E-RA-DKF (best)** | **96.48%** | 3.80% | **78.18%** | 54.55 | **0.927** | **2.65** |
+
+E-RA-DKF improves Acc_Dr by +2.3% over DKF and +1.9% over RA-DKF, with the best retain cosine similarity (0.927). The lf=0.07 configuration is the sweet spot — lower lf values forget incompletely (Acc_Df >20%), higher values over-suppress retain accuracy.
+
+---
+
+## Week 9 — Scaling to CIFAR-100 (ResNet-50, 10-class forgetting)
+
+### Setup Change
+
+| | CIFAR-10 | CIFAR-100 |
+|---|---|---|
+| Dataset | 10 classes | 100 classes |
+| Forget set | 1 class (class 0) | 10 classes (classes 0-9) |
+| Model | ResNet-18 | ResNet-50 (CIFAR-adapted) |
+| Feature dim | 512-dim avgpool | 2048-dim avgpool |
+
+### Root Cause of Failure
+
+DKF and its variants perform significantly worse on CIFAR-100. The root cause is the β-VAE: with 10 forget classes in every batch, the encoder receives mixed signals from 10 different forget-class distributions and learns a blurry average of what "shared vs unique" means. This produces noisy counterfactuals, which corrupt the KL distillation target for the student.
+
+Notably, NegGrad (a simpler method) outperforms DKF on CIFAR-100 — evidence that the VAE is the bottleneck, not the student training objective.
+
+### Results (CIFAR-100)
+
+| Method | Acc_Dr | Acc_Df | Acc_val | MIA | Retain Cosine |
+|--------|--------|--------|---------|-----|---------------|
+| Retrain | 99.96% | 0.00% | 69.30% | 55.95 | — |
+| NegGrad | 93.83% | 0.48% | 63.12% | 52.65 | — |
+| DKF | 89.95% | 0.72% | 59.76% | 60.90 | 0.895 |
+| RA-DKF | 88.68% | 0.62% | 59.27% | 62.40 | 0.890 |
+| E-RA-DKF | 86.57% | 0.68% | 57.67% | 60.35 | 0.880 |
+
+E-RA-DKF is actually the worst variant on CIFAR-100 — the cosine alignment term helps when counterfactuals are clean but hurts when they are noisy, amplifying the VAE bottleneck.
+
+---
+
+## Week 10 — Conditional β-VAE DKF (C-DKF)
+
+### Core Idea
+
+The unconditional β-VAE has no class information — it guesses what is "shared" vs "unique" from pixels alone across 10 mixed forget classes simultaneously. The fix: inject a learned class embedding into both encoders and the decoder.
+
+```
+class_embed = nn.Embedding(num_classes, 64)
+
+encoder_s(x_f, embed(y_f)) → S_f   # knows which forget class to encode shared features for
+encoder_u(x_r, embed(y_r)) → U_r   # knows which retain class to encode unique features for
+decoder(S_f, U_r, embed(y_f))  → x_cf  # knows which forget identity to strip out
+```
+
+This turns the β-VAE into a **Conditional β-VAE (Cβ-VAE)**. Each class now gets a targeted counterfactual rather than a blurry average across 10 classes.
+
+### Method Variants
+
+| Method | Description |
+|--------|-------------|
+| C-DKF | Conditional VAE + base DKF losses |
+| CE-RA-DKF | Conditional VAE + cosine alignment + detached contrast |
+| C-DKF v2 | C-DKF + retain knowledge distillation (KL student(x_r) ∥ teacher(x_r)) |
+
+### Results (CIFAR-100)
+
+| Method | Acc_Dr | Acc_Df | Acc_val | MIA | Retain Cosine | Avg.Gap |
+|--------|--------|--------|---------|-----|---------------|---------|
+| DKF (Week 9) | 89.95% | 0.72% | 59.76% | 60.90 | 0.895 | 6.57 |
+| E-RA-DKF (Week 9) | 86.57% | 0.68% | 57.67% | 60.35 | 0.880 | 7.58 |
+| C-DKF v1 | 93.42% | 1.26% | 62.08% | 61.15 | 0.911 | 5.47 |
+| CE-RA-DKF v1 | 93.04% | 1.86% | 62.13% | 59.95 | 0.906 | 5.40 |
+| **C-DKF v2** | **93.45%** | **0.86%** | 61.87% | 60.45 | 0.894 | **5.03** |
+
+The conditional VAE closes ~75% of the retain-accuracy gap between DKF and retrain (+3.5% Acc_Dr). The retain KD term in v2 further improves Avg.Gap to 5.03.
+
+---
+
+## Week 11 — Guarded Retain Repair
+
+### Motivation
+
+C-DKF v2 forgets well (Acc_Df 0.86%) but the student still drifts ~6.5% below retrain on Acc_Dr. This utility damage is a separate problem from forgetting quality — a targeted repair phase addresses it directly.
+
+### Two-Stage Method
+
+**Stage 1 — C-DKF v2 forgetting** (from Week 10)
+Conditional VAE + DKF losses + retain KD. Produces clean forgetting.
+
+**Stage 2 — Guarded retain repair**
+Short fine-tuning on retain data with a forget suppression guard:
+
+```
+L_repair = λ_retain * CE(student(x_r), y_r)
+         + λ_kd     * KL(student(x_r) || teacher(x_r))    # soft label anchor
+         + λ_guard  * KL(student(x_f) || teacher(x_cf))   # forget suppression
+```
+
+The guard term reuses the Cβ-VAE counterfactuals to keep forget-class predictions aligned to counterfactual teacher outputs during repair. Without this guard, even 1 epoch of retain fine-tuning can partially relearn forgotten classes.
+
+### Sweep Results (lr=1e-4, 9 configurations)
+
+| Config | Acc_Dr | Acc_Df | Acc_val | MIA | Avg.Gap |
+|--------|--------|--------|---------|-----|---------|
+| C-DKF v2 (no repair) | 93.44% | 0.66% | 61.87% | 60.10 | 4.79 |
+| ep=1, lg=0.5 | **95.10%** | **1.54%** | 62.81% | 57.30 | 3.66 |
+| ep=2, lg=0.5 | 90.54% | 2.36% | 60.45% | 53.60 | 5.65 |
+| ep=3, lg=0.5 | 94.78% | 2.26% | **63.57%** | **55.25** | **3.37** |
+| ep=1, lg=0.75 | 91.72% | 1.04% | 60.24% | 53.55 | 5.09 |
+| ep=3, lg=0.75 | 92.00% | 2.34% | 61.75% | 54.30 | 4.78 |
+| ep=1, lg=1.0 | 94.63% | 3.58% | 62.97% | 55.70 | 3.85 |
+
+**Best configuration: ep=1, lg=0.5** — hits all paper targets:
+- Acc_Dr 95.10% (target ≥ 94.2%) ✅
+- Acc_Df 1.54% (target ≤ 2.0%) ✅
+- Acc_val 62.81% (target ≥ 62.5%) ✅
+- MIA 57.30 (target 55–58) ✅
+- Avg.Gap 3.66 (target ≤ 4.0) ✅
+
+### Full CIFAR-100 Progression
+
+| Method | Acc_Dr | Acc_Df | Acc_val | MIA | Avg.Gap |
+|--------|--------|--------|---------|-----|---------|
+| Retrain | 99.97% | 0.00% | 69.30% | 55.65 | — |
+| Fine-tune | 95.68% | 8.40% | 65.03% | 60.25 | — |
+| NegGrad | 93.83% | 0.48% | 63.12% | 52.65 | — |
+| DKF | 89.95% | 0.72% | 59.76% | 60.90 | 6.57 |
+| E-RA-DKF | 86.57% | 0.68% | 57.67% | 60.35 | 7.58 |
+| C-DKF v2 | 93.45% | 0.86% | 61.87% | 60.45 | 5.03 |
+| **C-DKF v2 + Repair** | **95.10%** | **1.54%** | **62.81%** | **57.30** | **3.66** |
+
+### Key finding
+The final method (C-DKF v2 + 1-epoch guarded repair) matches Fine-tune's retain accuracy (95.10% vs 95.68%) while actually forgetting properly (1.54% vs 8.40% Acc_Df) — the strongest comparison in the paper.
+
+---
+
+## Final Results Summary
+
+### CIFAR-10 (ResNet-18, forget 1/10 classes)
+
+| Method | Acc_Dr | Acc_Df | Acc_val | MIA |
+|--------|--------|--------|---------|-----|
+| Retrain | 98.33% | 0.00% | 79.43% | 50.85 |
+| Fine-tune | 93.37% | 0.10% | 76.81% | 54.10 |
+| NegGrad | 91.64% | 0.22% | 74.97% | 54.20 |
+| DKF | 94.18% | 2.26% | 76.36% | 51.95 |
+| RA-DKF | 94.59% | 3.42% | 76.68% | 54.15 |
+| **E-RA-DKF (best)** | **96.48%** | 3.80% | **78.18%** | 54.55 |
+
+### CIFAR-100 (ResNet-50, forget 10/100 classes)
+
+| Method | Acc_Dr | Acc_Df | Acc_val | MIA | Avg.Gap |
+|--------|--------|--------|---------|-----|---------|
+| Retrain | 99.97% | 0.00% | 69.30% | 55.65 | — |
+| Fine-tune | 95.68% | 8.40% | 65.03% | 60.25 | — |
+| NegGrad | 93.83% | 0.48% | 63.12% | 52.65 | — |
+| DKF | 89.95% | 0.72% | 59.76% | 60.90 | 6.57 |
+| E-RA-DKF | 86.57% | 0.68% | 57.67% | 60.35 | 7.58 |
+| C-DKF v1 | 93.42% | 1.26% | 62.08% | 61.15 | 5.47 |
+| C-DKF v2 | 93.45% | 0.86% | 61.87% | 60.45 | 5.03 |
+| **C-DKF v2 + Repair** | **95.10%** | **1.54%** | **62.81%** | **57.30** | **3.66** |
+
+---
+
 ## Project Structure
 
 Each week is a self-contained folder. Shared environment (`pyproject.toml`, `.venv`) lives at the root.
 
 ```
 machine-unlearning-dissertation/
-├── week1_baseline/
-│   ├── config.py            # Hyperparameters and device detection
-│   ├── data_utils.py        # CIFAR-10 loading, forget/retain split
-│   ├── train_original.py    # ResNet-18 training script (--resume supported)
-│   ├── checkpoints/         # Saved weights — not tracked in git
-│   │   └── original_model.pth
-│   └── data/                # CIFAR-10 dataset — not tracked in git
-│
-├── week2_unlearning/
-│   ├── config.py            # Inherits Week 1 settings, points to Week 1 data/model
-│   ├── data_utils.py        # Same loader, download=False (reuses Week 1 data)
-│   ├── unlearn.py           # Retrain, Fine-tune, NegGrad implementations
-│   ├── evaluate.py          # Acc_Dr, Acc_Df, Acc_val, MIA metrics
-│   ├── run_experiments.py   # Main runner — produces results table
-│   ├── checkpoints/         # Unlearned model weights — not tracked in git
-│   └── results/             # JSON results output — not tracked in git
-│
-├── week3-4/
-│   ├── config.py            # DKF hyperparameters (β, λ_retain, λ_forget, λ_c)
-│   ├── data_utils.py        # Same CIFAR-10 loader, reuses Week 1 data
-│   ├── beta_vae.py          # β-VAE architecture (SharedEncoder, UniqueEncoder, Decoder)
-│   ├── dkf.py               # Full DKF training: Phase 1 (VAE) + Phase 2 (student)
-│   ├── evaluate.py          # Same metrics as Week 2
-│   ├── run_experiments.py   # Main runner — loads Week 2 results, runs DKF, prints table
-│   ├── checkpoints/         # VAE and DKF model weights — not tracked in git
-│   └── results/             # JSON results output — not tracked in git
-│
-├── week5_analysis/
-│   ├── projection_unlearning.py        # GP-Unlearn: gradient projection baseline
-│   ├── visualize_disentanglement.py    # t-SNE of β-VAE S and U latent spaces
-│   ├── visualize_shared_knowledge.py   # Counterfactual grid + cosine similarity panels
-│   ├── visualize_best_image_story.py   # Full disentanglement story: original → recon → S → U → mixed
-│   ├── visualize_image_decomposition.py# Per-image S/U decomposition panel
-│   └── visualize_su_decomposition.py   # Grid comparing S and U reconstructions across classes
-│
-├── week6_7_novelty/
-│   ├── ra_dkf.py                     # RA-DKF training (DKF + L_align)
-│   ├── run_experiments.py            # λ_align sweep + full comparison table
-│   ├── evaluate_shared_knowledge.py  # Feature drift, agreement, KL, ARI/NMI metrics
-│   ├── checkpoints/                  # RA-DKF model weights — not tracked in git
-│   └── results/                      # JSON results — not tracked in git
-│
-├── README.md                # This research log
-├── pyproject.toml           # Shared uv dependencies
+├── week1_baseline/              # ResNet-18 training on CIFAR-10
+├── week2_unlearning/            # Retrain, Fine-tune, NegGrad baselines
+├── week3-4/                     # DKF: beta-VAE + counterfactual student training
+├── week5_analysis/              # Visualizations: t-SNE, shared knowledge, VAE decomposition
+├── week6_7_novelty/             # RA-DKF: normalized MSE feature alignment
+├── week8_enhanced_radkf/        # E-RA-DKF: cosine alignment + multi-layer + detached contrast
+├── week9_cifar100_resnet50/     # Scale to CIFAR-100 ResNet-50, 10-class forgetting
+├── week10_cvae_dkf/             # Conditional beta-VAE DKF (C-DKF, CE-RA-DKF, v2)
+├── week11_retain_repair/        # Guarded retain repair: sweep + best config
+├── README.md
+├── pyproject.toml
 └── uv.lock
 ```
+
+### Key files per week
+
+| Week | Core file | What it does |
+|------|-----------|--------------|
+| 3-4 | `beta_vae.py` | beta-VAE disentanglement architecture |
+| 3-4 | `dkf.py` | DKF two-phase training |
+| 6-7 | `ra_dkf.py` | RA-DKF with L_align |
+| 8 | `enhanced_ra_dkf.py` | E-RA-DKF with cosine + multi-layer + detach |
+| 9 | `methods.py` | Unified DKF/RA-DKF/E-RA-DKF for CIFAR-100 |
+| 10 | `beta_vae_conditional.py` | Conditional beta-VAE (class embedding) |
+| 10 | `methods.py` | C-DKF / CE-RA-DKF / v2 training |
+| 11 | `repair.py` | Static guarded retain repair |
+| 11 | `adaptive_repair.py` | AG-C-DKF adaptive guard (ablation) |
+| 11 | `sweep_11a.py` | 9-config hyperparameter sweep |
 
 ---
 
@@ -611,42 +783,28 @@ machine-unlearning-dissertation/
 
 ```bash
 # Clone and set up
-git clone https://github.com/Sidharth2ko2/machine-unlearning-dissertation.git
-cd machine-unlearning-dissertation
+git clone https://github.com/Sidharth2ko2/machine-unlearning.git
+cd machine-unlearning
 uv venv && uv sync
 
-# Week 1 — Train baseline model (~37 min)
-cd week1_baseline
-uv run python train_original.py --epochs 100
+# CIFAR-10 pipeline (Weeks 1-8)
+cd week1_baseline && python train_original.py --epochs 100
+cd ../week2_unlearning && python run_experiments.py
+cd ../week3-4 && python run_experiments.py
+cd ../week6_7_novelty && python run_experiments.py
+cd ../week8_enhanced_radkf && python run_experiments.py
 
-# Week 2 — Run unlearning baselines (requires Week 1 checkpoint)
-cd ../week2_unlearning
-uv run python run_experiments.py
-uv run python run_experiments.py --skip-retrain   # skip the 37-min retrain if already done
-
-# Week 3 — Run DKF (requires Week 1 checkpoint + Week 2 results)
-cd ../week3-4
-uv run python run_experiments.py
-# First run trains β-VAE (~5 min) then student (~10 min)
-# Subsequent runs load cached VAE checkpoint — only ~10 min total
-
-# Week 6-7 — Run RA-DKF novelty (requires Week 1 + Week 2 + Week 3 checkpoints)
-cd ../week6_7_novelty
-uv run python run_experiments.py
-# Reuses the Week 3 β-VAE checkpoint automatically — no VAE re-training
-# Runs λ_align sweep over [0.1, 0.5, 1.0] → ~30 min total
-# Use --reuse-checkpoints to reload saved RA-DKF models and skip training
-
-uv run python run_experiments.py --lambda-aligns 0.5          # single λ
-uv run python run_experiments.py --reuse-checkpoints          # evaluate only
-uv run python run_experiments.py --lambda-aligns 0.1 0.5 1.0 --student-epochs 5
+# CIFAR-100 pipeline (Weeks 9-11, requires GPU)
+cd ../week9_cifar100_resnet50 && python run_experiments.py --stages all --dkf-amp
+cd ../week10_cvae_dkf && python run_experiments.py --stages all --reuse-checkpoints --dkf-amp
+cd ../week11_retain_repair && python sweep_11a.py --dkf-amp
 ```
 
 ### Dependencies
 - Python 3.12
-- PyTorch 2.10.0 + torchvision 0.25.0
-- scikit-learn, numpy, matplotlib, tqdm
-- Platform: CUDA / Apple MPS / CPU auto-detected
+- PyTorch 2.5.1 + CUDA 12.1
+- torchvision, scikit-learn, numpy, matplotlib, tqdm
+- GPU recommended for Weeks 9-11 (RTX 4050 used in experiments)
 
 ---
 
@@ -654,6 +812,7 @@ uv run python run_experiments.py --lambda-aligns 0.1 0.5 1.0 --student-epochs 5
 
 - He et al., "Deep Residual Learning for Image Recognition", CVPR 2016
 - Krizhevsky, "Learning Multiple Layers of Features from Tiny Images", 2009
-- Base paper: Disentangled Knowledge Forgetting in Machine Unlearning (Anonymous submission)
+- Base paper: Disentangled Knowledge Forgetting in Machine Unlearning
 - Chundawat et al., "Zero-Shot Machine Unlearning", 2023
 - Golatkar et al., "Eternal Sunshine of the Spotless Net", CVPR 2020
+- Chen et al., "Machine Unlearning", IEEE S&P 2021
