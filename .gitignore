@@ -7,8 +7,5 @@ __pycache__/
 logs/
 *.zip
 
-# Ignore results dirs in weeks that don't need them tracked
+# Week 1 has no results JSON — only a model checkpoint
 week1_baseline/results/
-week2_unlearning/results/
-week3-4/results/
-week5_analysis/results/

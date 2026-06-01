@@ -1,0 +1,14 @@
+{
+  "gp_unlearn": {
+    "Acc_Dr": 77.56888888888889,
+    "Acc_Df": 91.8,
+    "Acc_val": 68.79,
+    "MIA": 53.75
+  },
+  "original": {
+    "Acc_Dr": 98.0,
+    "Acc_Df": 98.62,
+    "Acc_val": 87.83,
+    "MIA": 55.7
+  }
+}

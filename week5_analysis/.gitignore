@@ -1,6 +1,7 @@
-checkpoints/
 results/*
 !results/*.json
+!results/*.png
+!results/*.txt
 __pycache__/
 *.pyc
 .DS_Store
